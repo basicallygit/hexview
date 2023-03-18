@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{Read, BufReader};
+use std::io::{BufReader, Read};
 use std::process::exit;
 
 const BUFFER_SIZE: usize = 4096;
@@ -16,7 +16,7 @@ impl HexViewer {
         Ok(Self {
             buffer: [0; BUFFER_SIZE],
             offset: 0,
-            reader: BufReader::new(File::open(filename)?)
+            reader: BufReader::new(File::open(filename)?),
         })
     }
 
@@ -40,8 +40,7 @@ impl HexViewer {
                     let c = *byte as char;
                     if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
                         print!("{}", c);
-                    }
-                    else {
+                    } else {
                         print!(".");
                     }
                 }
@@ -64,7 +63,6 @@ fn main() -> std::io::Result<()> {
 
     let mut viewer = HexViewer::new(&args[1])?;
     viewer.mainloop()?;
-
 
     Ok(())
 }
