@@ -1,6 +1,57 @@
 use std::env;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, BufReader};
+use std::process::exit;
+
+const BUFFER_SIZE: usize = 4096;
+
+struct HexViewer {
+    buffer: [u8; BUFFER_SIZE],
+    offset: u32,
+    reader: BufReader<File>,
+}
+
+impl HexViewer {
+    fn new(filename: &str) -> std::io::Result<Self> {
+        Ok(Self {
+            buffer: [0; BUFFER_SIZE],
+            offset: 0,
+            reader: BufReader::new(File::open(filename)?)
+        })
+    }
+
+    fn mainloop(&mut self) -> std::io::Result<()> {
+        loop {
+            let bytes_read = self.reader.read(&mut self.buffer)?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
+                print!("{:08x} | ", self.offset);
+                self.offset += chunk.len() as u32;
+                for byte in chunk {
+                    print!("{:02x} ", byte);
+                }
+                print!("  ");
+
+                for byte in chunk {
+                    let c = *byte as char;
+                    if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
+                        print!("{}", c);
+                    }
+                    else {
+                        print!(".");
+                    }
+                }
+                println!();
+            });
+        }
+
+        Ok(())
+    }
+}
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -8,34 +59,12 @@ fn main() -> std::io::Result<()> {
 
     if argc < 2 {
         eprintln!("No file specified!");
-        std::process::exit(1);
+        exit(1);
     }
 
-    let mut file = File::open(&args[1])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    let mut viewer = HexViewer::new(&args[1])?;
+    viewer.mainloop()?;
 
-    let mut offset = 0;
-
-    buffer.chunks(16).for_each(|chunk| {
-        print!("{:08x} | ", offset);
-        offset += chunk.len() as u32;
-        for byte in chunk {
-            print!("{:02x} ", byte);
-        }
-        print!("  ");
-
-        for byte in chunk {
-            let c = *byte as char;
-            if c.is_ascii_alphanumeric() {
-                print!("{}", c);
-            }
-            else {
-                print!(".");
-            }
-        }
-        println!();
-    });
 
     Ok(())
 }
