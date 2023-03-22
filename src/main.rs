@@ -1,9 +1,7 @@
 use std::env;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{self, BufReader, Read};
 use std::process::exit;
-
-type Result<T> = std::io::Result<T>;
 
 const BUFFER_SIZE: usize = 4096;
 
@@ -14,7 +12,7 @@ struct HexViewer {
 }
 
 impl HexViewer {
-    fn new(filename: &str) -> Result<Self> {
+    fn new(filename: &str) -> io::Result<Self> {
         Ok(Self {
             buffer: [0; BUFFER_SIZE],
             offset: 0,
@@ -22,7 +20,7 @@ impl HexViewer {
         })
     }
 
-    fn mainloop(&mut self) -> Result<()> {
+    fn mainloop(&mut self) -> io::Result<()> {
         loop {
             let bytes_read = self.reader.read(&mut self.buffer)?;
 
@@ -54,14 +52,31 @@ impl HexViewer {
     }
 }
 
-fn is_binary_or_object(filename: &str) -> Result<(bool, u8, u8)> {
-    let mut magic_number = [0; 6];
-    File::open(filename)?.read_exact(&mut magic_number)?;
+#[allow(non_snake_case)]
+fn print_extra_info(filename: &str) -> io::Result<()> {
+    let mut header_data = [0u8; 6];
+    File::open(filename)?.read_exact(&mut header_data)?;
 
-    match magic_number {
-        //Magic number for ELF / Shared Objects
-        [0x7F, 0x45, 0x4C, 0x46, bitmode, endian] => Ok((true, bitmode, endian)),
-        _ => Ok((false, 0, 0)),
+    match header_data {
+        [0x7F, 0x45, 0x4C, 0x46, word_size, endianness] => {
+            print!("[ELF] ");
+            match word_size {
+                0x01 => print!("32-bit"),
+                0x02 => print!("64-bit"),
+                _ => print!("Unknown word size"),
+            }
+            print!(", ");
+
+            match endianness {
+                0x01 => print!("little endian"),
+                0x02 => print!("big endian"),
+                _ => print!("Unknown endianness"),
+            }
+            println!();
+
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 
@@ -75,20 +90,7 @@ fn main() -> std::io::Result<()> {
     }
 
     if cfg!(target_os = "linux") {
-        if let Ok((true, bitmode, endian)) = is_binary_or_object(&args[1]) {
-            print!("{}: ELF / Shared Object", &args[1]);
-            match bitmode {
-                0x01 => print!(", 32-bit"),
-                0x02 => print!(", 64-bit"),
-                _ => print!(", unknown bitmode"),
-            }
-            match endian {
-                0x01 => print!(", little endian"),
-                0x02 => print!(", big endian"),
-                _ => print!(", unknown endian"),
-            }
-            println!();
-        }
+        print_extra_info(&args[1]).ok();
     }
 
     let mut viewer = HexViewer::new(&args[1])?;
