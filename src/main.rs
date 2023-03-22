@@ -52,7 +52,6 @@ impl HexViewer {
     }
 }
 
-#[allow(non_snake_case)]
 fn print_extra_info(filename: &str) -> io::Result<()> {
     let mut header_data = [0u8; 6];
     File::open(filename)?.read_exact(&mut header_data)?;
@@ -80,7 +79,7 @@ fn print_extra_info(filename: &str) -> io::Result<()> {
     }
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let argc = args.len();
 
