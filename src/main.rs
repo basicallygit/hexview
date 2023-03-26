@@ -1,6 +1,7 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
+use std::io::{self, stdin, stdout, BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::process::exit;
 
 const BUFFER_SIZE: usize = 4096;
@@ -29,13 +30,14 @@ impl HexViewer {
             }
 
             self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
-                print!("{:08x} | ", self.offset);
+                print!("0x{:08x} | ", self.offset);
                 self.offset += chunk.len() as u32;
                 for byte in chunk {
                     print!("{:02x} ", byte);
                 }
                 print!("  ");
 
+                print!("|");
                 for byte in chunk {
                     let c = *byte as char;
                     if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() || c == ' ' {
@@ -44,10 +46,70 @@ impl HexViewer {
                         print!(".");
                     }
                 }
+                print!("|");
                 println!();
             });
         }
 
+        Ok(())
+    }
+
+    fn edit(&mut self, output_file: &str, offset: &str) -> io::Result<()> {
+        if !offset.starts_with("0x") {
+            eprintln!("{}: Invalid hex value, example: 0xAAAA", offset);
+            exit(1);
+        }
+
+        if Path::new(output_file).exists() {
+            eprintln!("{}: File already exists, aborting..", output_file);
+            exit(1);
+        }
+
+        let mut out_file = BufWriter::new(File::create(output_file)?);
+        let target_offset = u32::from_str_radix(&offset[2..], 16).unwrap();
+
+        loop {
+            let bytes_read = self.reader.read(&mut self.buffer)?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
+                if self.offset == target_offset {
+                    let mut input = String::new();
+                    print!("Old bytes: ");
+                    for byte in chunk {
+                        print!("{:02x} ", byte);
+                    }
+                    print!("  |");
+                    for byte in chunk {
+                        let c = *byte as char;
+                        if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() || c == ' ' {
+                            print!("{}", c);
+                        } else {
+                            print!(".");
+                        }
+                    }
+                    print!("|\nNew bytes: ");
+                    stdout().flush().unwrap();
+
+                    stdin().read_line(&mut input).unwrap();
+
+                    let hex_bytes = input
+                        .trim()
+                        .split(' ')
+                        .map(|hex| u8::from_str_radix(hex, 16).unwrap());
+
+                    out_file.write_all(&hex_bytes.collect::<Vec<_>>()).unwrap();
+                } else {
+                    out_file.write_all(chunk).unwrap();
+                }
+                self.offset += chunk.len() as u32;
+            });
+        }
+
+        println!("Successfully wrote new data");
         Ok(())
     }
 }
@@ -79,7 +141,7 @@ fn print_extra_info(filename: &str) -> io::Result<()> {
     }
 }
 
-fn main() -> io::Result<()> {
+fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let argc = args.len();
 
@@ -88,12 +150,34 @@ fn main() -> io::Result<()> {
         exit(1);
     }
 
+    if &args[1] == "--help" {
+        println!("Usage: hexview [filename] (--edit [offset] [output_file])");
+        return Ok(());
+    }
+
+    if !Path::new(&args[1]).exists() {
+        eprintln!("{}: No such file or directory.", &args[1]);
+        exit(1);
+    }
+
     if cfg!(target_os = "linux") {
         print_extra_info(&args[1]).ok();
     }
 
     let mut viewer = HexViewer::new(&args[1])?;
-    viewer.mainloop()?;
+
+    if argc == 5 {
+        if &args[2] == "--edit" {
+            let offset = &args[3];
+            let output_file = &args[4];
+            viewer.edit(output_file, offset)?;
+        } else {
+            eprintln!("Usage: hexview [filename] (--edit [offset] [output_file])");
+            return Ok(());
+        }
+    } else {
+        viewer.mainloop()?;
+    }
 
     Ok(())
 }
