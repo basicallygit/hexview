@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufReader, BufRead, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::exit;
 
 const BUFFER_SIZE: usize = 10240; //10KB read at a time default
@@ -79,14 +79,12 @@ fn import(filename: &str) -> io::Result<()> {
             }
 
             let val = u8::from_str_radix(&String::from_utf8_lossy(byte), 16).unwrap();
-            io::stdout().write(&[val]).unwrap();
-
+            io::stdout().write_all(&[val]).unwrap();
         }
         io::stdout().flush().unwrap();
     }
 
     Ok(())
-
 }
 
 fn main() -> io::Result<()> {
