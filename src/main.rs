@@ -32,7 +32,10 @@ impl HexViewer {
             self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
                 print!("0x{:08x} | ", self.offset);
                 self.offset += chunk.len() as u32;
-                for byte in chunk {
+                for (i, byte) in chunk.iter().enumerate() {
+                    if i == 8 {
+                        print!(" ");
+                    }
                     print!("{:02x} ", byte);
                 }
                 print!("  ");
@@ -128,6 +131,7 @@ fn print_extra_info(filename: &str) -> io::Result<()> {
             }
             print!(", ");
 
+            print!("2's complement, ");
             match endianness {
                 0x01 => print!("little endian"),
                 0x02 => print!("big endian"),
