@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::process::exit;
 
 const BUFFER_SIZE: usize = 10240; //10KB read at a time default
@@ -21,6 +21,8 @@ impl HexViewer {
     }
 
     fn mainloop(&mut self) {
+        let mut stdout = BufWriter::new(io::stdout());
+
         while let Ok(bytes_read) = self.reader.read(&mut self.buffer) {
             if bytes_read == 0 {
                 break;
@@ -28,32 +30,37 @@ impl HexViewer {
 
             let mut space = false;
             self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
-                print!("{:08x}: ", self.offset);
+                write!(stdout, "{:08x}", self.offset).unwrap();
                 self.offset += chunk.len() as u32;
+
                 for byte in chunk {
-                    print!("{:02x}", byte);
+                    write!(stdout, "{:02x}", byte).unwrap();
                     if space {
-                        print!(" ");
+                        write!(stdout, " ").unwrap();
                     }
                     space = !space;
                 }
-                print!(" ");
+
+                write!(stdout, " ").unwrap();
 
                 for byte in chunk {
                     let c = *byte;
                     if c > 32 && c < 127 {
                         //
-                        print!("{}", c as char);
+                        write!(stdout, "{}", c as char).unwrap();
                     } else {
-                        print!(".");
+                        write!(stdout, ".").unwrap();
                     }
                 }
-                println!();
+                writeln!(stdout).unwrap();
             });
         }
+        stdout.flush().unwrap();
     }
 
     fn raw(&mut self) {
+        let mut stdout = BufWriter::new(io::stdout());
+
         while let Ok(bytes_read) = self.reader.read(&mut self.buffer) {
             if bytes_read == 0 {
                 break;
@@ -61,9 +68,9 @@ impl HexViewer {
 
             self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
                 for byte in chunk {
-                    print!("{:02x}", byte);
+                    write!(stdout, "{:02x}", byte).unwrap();
                 }
-                println!();
+                writeln!(stdout).unwrap();
             });
         }
     }
@@ -71,18 +78,15 @@ impl HexViewer {
 
 fn import(filename: &str) -> io::Result<()> {
     let reader = BufReader::new(File::open(filename)?);
+    let mut stdout = BufWriter::new(io::stdout());
+
     for line in reader.lines().map(|l| l.unwrap()) {
         for byte in line.as_bytes().chunks(2) {
-            if byte.len() != 2 {
-                eprintln!("Bad hex value.");
-                exit(1);
-            }
-
             let val = u8::from_str_radix(&String::from_utf8_lossy(byte), 16).unwrap();
-            io::stdout().write_all(&[val]).unwrap();
+            stdout.write_all(&[val]).unwrap();
         }
-        io::stdout().flush().unwrap();
     }
+    stdout.flush().unwrap();
 
     Ok(())
 }
