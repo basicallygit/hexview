@@ -30,7 +30,7 @@ impl HexViewer {
 
             let mut space = false;
             self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
-                write!(stdout, "{:08x}", self.offset).unwrap();
+                write!(stdout, "{:08x}: ", self.offset).unwrap();
                 self.offset += chunk.len() as u32;
 
                 for byte in chunk {
