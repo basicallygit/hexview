@@ -45,7 +45,7 @@ impl HexViewer {
 
                 for byte in chunk {
                     let c = *byte;
-                    if c > 32 && c < 127 {
+                    if c > 31 && c < 127 {
                         //
                         write!(stdout, "{}", c as char).unwrap();
                     } else {
