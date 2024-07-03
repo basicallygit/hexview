@@ -1,9 +1,20 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
-use std::process::exit;
+use std::io::{self, BufReader, BufWriter, Read, Write, ErrorKind};
+use std::process::ExitCode;
 
-const BUFFER_SIZE: usize = 10240; //10KB read at a time default
+trait IsAsciiPrintable {
+    fn is_ascii_printable(&self) -> bool;
+}
+
+impl IsAsciiPrintable for u8 {
+    #[inline]
+    fn is_ascii_printable(&self) -> bool {
+        matches!(self, 32..=126)
+    }
+}
+
+const BUFFER_SIZE: usize = 10240; //10KB buffer read
 
 struct HexViewer {
     buffer: [u8; BUFFER_SIZE],
@@ -20,10 +31,10 @@ impl HexViewer {
         })
     }
 
-    fn mainloop(&mut self) {
+    fn display(&mut self) {
         let mut stdout = BufWriter::new(io::stdout());
 
-        while let Ok(bytes_read) = self.reader.read(&mut self.buffer) {
+        while let Ok(bytes_read) =  self.reader.read(&mut self.buffer) {
             if bytes_read == 0 {
                 break;
             }
@@ -33,6 +44,7 @@ impl HexViewer {
                 write!(stdout, "{:08x}: ", self.offset).unwrap();
                 self.offset += chunk.len() as u32;
 
+                // Display the raw hex values
                 for byte in chunk {
                     write!(stdout, "{:02x}", byte).unwrap();
                     if space {
@@ -43,10 +55,10 @@ impl HexViewer {
 
                 write!(stdout, " ").unwrap();
 
+                // Display any printable characters
                 for byte in chunk {
                     let c = *byte;
-                    if c > 31 && c < 127 {
-                        //
+                    if c.is_ascii_printable() {
                         write!(stdout, "{}", c as char).unwrap();
                     } else {
                         write!(stdout, ".").unwrap();
@@ -57,70 +69,35 @@ impl HexViewer {
         }
         stdout.flush().unwrap();
     }
-
-    fn raw(&mut self) {
-        let mut stdout = BufWriter::new(io::stdout());
-
-        while let Ok(bytes_read) = self.reader.read(&mut self.buffer) {
-            if bytes_read == 0 {
-                break;
-            }
-
-            self.buffer[..bytes_read].chunks(16).for_each(|chunk| {
-                for byte in chunk {
-                    write!(stdout, "{:02x}", byte).unwrap();
-                }
-                writeln!(stdout).unwrap();
-            });
-        }
-    }
 }
 
-fn import(filename: &str) -> io::Result<()> {
-    let reader = BufReader::new(File::open(filename)?);
-    let mut stdout = BufWriter::new(io::stdout());
-
-    for line in reader.lines().map(|l| l.unwrap()) {
-        for byte in line.as_bytes().chunks(2) {
-            let val = u8::from_str_radix(&String::from_utf8_lossy(byte), 16).unwrap();
-            stdout.write_all(&[val]).unwrap();
-        }
-    }
-    stdout.flush().unwrap();
-
-    Ok(())
-}
-
-fn main() -> io::Result<()> {
+fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     let argc = args.len();
 
     if argc < 2 {
         eprintln!("No file specified!");
-        exit(1);
+        return ExitCode::FAILURE;
     }
 
     if &args[1] == "--help" {
-        println!("Usage: hexview [filename] (-r/--raw)");
-        return Ok(());
+        println!("Usage: hexview [filename]");
+        return ExitCode::SUCCESS;
     }
 
-    if &args[1] == "import" {
-        if argc < 3 {
-            eprintln!("import: no file specified");
-            exit(1);
-        }
-        import(&args[2])?;
-        exit(0);
-    }
+    let mut viewer = match HexViewer::new(&args[1]) {
+        Ok(v) => v,
+        Err(e) => {
+            match e.kind() {
+                ErrorKind::NotFound => eprintln!("{}: No such file or directory", &args[1]),
+                ErrorKind::PermissionDenied => eprintln!("{}: Permission denied", &args[1]),
+                _ => unreachable!(),
+            }
+            return ExitCode::FAILURE;
+        },
+    };
 
-    let mut viewer = HexViewer::new(&args[1])?;
+    viewer.display();
 
-    if args.contains(&String::from("-r")) || args.contains(&String::from("--raw")) {
-        viewer.raw();
-    } else {
-        viewer.mainloop();
-    }
-
-    Ok(())
+    return ExitCode::SUCCESS;
 }
