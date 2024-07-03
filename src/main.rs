@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Read, Write, ErrorKind};
+use std::io::{self, BufReader, BufWriter, ErrorKind, Read, Write};
 use std::process::ExitCode;
 
 trait IsAsciiPrintable {
@@ -34,7 +34,7 @@ impl HexViewer {
     fn display(&mut self) {
         let mut stdout = BufWriter::new(io::stdout());
 
-        while let Ok(bytes_read) =  self.reader.read(&mut self.buffer) {
+        while let Ok(bytes_read) = self.reader.read(&mut self.buffer) {
             if bytes_read == 0 {
                 break;
             }
@@ -94,10 +94,10 @@ fn main() -> ExitCode {
                 _ => unreachable!(),
             }
             return ExitCode::FAILURE;
-        },
+        }
     };
 
     viewer.display();
 
-    return ExitCode::SUCCESS;
+    ExitCode::SUCCESS
 }
